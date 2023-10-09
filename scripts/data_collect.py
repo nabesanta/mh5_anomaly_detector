@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
+import time
 from sensor_msgs.msg import Imu
 from nav_msgs.msg import Odometry
 import csv
@@ -62,7 +63,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         LABEL = sys.argv[2]
 
-    sleep(3)
+    time.sleep(3)
 
     with open(cwd, "w+") as out_file:
         out = csv.writer(out_file, delimiter=',')
