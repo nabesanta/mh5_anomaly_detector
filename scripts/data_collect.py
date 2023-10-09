@@ -1,43 +1,50 @@
 #!/usr/bin/env python3
 
 import rospy
-import sys
-import os
-from time import sleep
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
 import csv
-from std_msgs.msg import String
+import sys
 
 POSITIONS_LIST = []
 LABEL = None
-COUNT = 0
-PREV = None
+PREV_IMU = None
+PREV_ODOM = None
 
-'''
-    Callback function when a joint_states message is published.
-    Adds positions to global list to be processed right afterwards.
-'''
-def control_command(val):
+def control_command_imu(val):
     global POSITIONS_LIST
     global LABEL
-    global PREV
-    global TASK_COUNT
+    global PREV_IMU
 
-    if list(val.position) == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]:
-        return
+    # Add your condition here based on the received IMU data
+    # For example, if you want to check if linear acceleration is non-zero:
+    if val.linear_acceleration.x != 0.0 or val.linear_acceleration.y != 0.0 or val.linear_acceleration.z != 0.0:
+        if LABEL:
+            if PREV_IMU != [val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z]:
+                POSITIONS_LIST.append([val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z, LABEL])
+                PREV_IMU = [val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z]
+        else:
+            if PREV_IMU != [val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z]:
+                POSITIONS_LIST.append([val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z])
+                PREV_IMU = [val.linear_acceleration.x, val.linear_acceleration.y, val.linear_acceleration.z]
 
-    if LABEL:
-        if PREV != list(val.position):
-            POSITIONS_LIST.append(list(val.position) + [LABEL])
-            PREV = list(val.position)
-    else:
-        if PREV != list(val.position):
-            POSITIONS_LIST.append(list(val.position))
-            PREV = list(val.position)
+def control_command_odom(val):
+    global POSITIONS_LIST
+    global LABEL
+    global PREV_ODOM
 
-'''
-    Helper for writing positions to csv
-'''
+    # Add your condition here based on the received Odom data
+    # For example, if you want to check if position has changed:
+    if val.pose.pose.position.x != 0.0 or val.pose.pose.position.y != 0.0 or val.pose.pose.position.z != 0.0:
+        if LABEL:
+            if PREV_ODOM != [val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z]:
+                POSITIONS_LIST.append([val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z, LABEL])
+                PREV_ODOM = [val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z]
+        else:
+            if PREV_ODOM != [val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z]:
+                POSITIONS_LIST.append([val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z])
+                PREV_ODOM = [val.pose.pose.position.x, val.pose.pose.position.y, val.pose.pose.position.z]
+
 def collect(out):
     while POSITIONS_LIST:
         out.writerow(POSITIONS_LIST[0])
@@ -47,18 +54,16 @@ if __name__ == '__main__':
     print('collect - ', sys.argv)
 
     rospy.init_node('data_collector', anonymous=True)
-    rospy.Subscriber(sys.argv[1],
-                    JointState,
-                    control_command)
+    rospy.Subscriber('/imu', Imu, control_command_imu)
+    rospy.Subscriber('/odom', Odometry, control_command_odom)
 
-    # Argv 1 - path + file name is expected
-    cwd = sys.argv[2]
+    cwd = sys.argv[1]
 
-    # NOTE: The label is an option
-    if len(sys.argv) > 3:
-        LABEL = sys.argv[3]
+    if len(sys.argv) > 2:
+        LABEL = sys.argv[2]
 
     sleep(3)
+
     with open(cwd, "w+") as out_file:
         out = csv.writer(out_file, delimiter=',')
         print('Writing to', cwd)
